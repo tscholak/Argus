@@ -49,14 +49,17 @@ class CirceCodecBuilder[U <: Universe](val u: U) extends CodecBuilder {
   """
 
   val anyDecoder = q"""
-    def anyDecoder: Decoder[Any] = Decoder.instance((h: HCursor) => h.focus.get match {
-      case n if n.isNull =>    null
-      case n if n.isNumber =>  n.as[Double]
-      case b if b.isBoolean => b.as[Boolean]
-      case s if s.isString =>  s.as[String]
-      case o if o.isObject =>  o.as[Map[String, Any]](Decoder.decodeMapLike(KeyDecoder.decodeKeyString, anyDecoder, Map.canBuildFrom))
-      case a if a.isArray =>   a.as[List[Any]](Decoder.decodeList(anyDecoder))
-    })
+    def anyDecoder: Decoder[Any] = new Decoder[Any] {
+      final def apply(c: HCursor): Decoder.Result[Any] = c.value match {
+        case n if n.isNull => Right(null)
+        case n if n.isNumber => Right(n.as[Double])
+        case b if b.isBoolean => Right(b.as[Boolean])
+        case s if s.isString => Right(s.as[String])
+        case o if o.isObject => Right(o.as[Map[String, Any]](Decoder.decodeMapLike(KeyDecoder.decodeKeyString, anyDecoder, Map.canBuildFrom)))
+        case a if a.isArray => Right(a.as[List[Any]](Decoder.decodeList(anyDecoder)))
+        case _ => Left(DecodingFailure("Any", c.history))
+      }
+    }
   """
 
   def mkAnyWrapperEncoder(typ: Tree) = q"""
